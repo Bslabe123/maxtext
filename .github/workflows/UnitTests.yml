@@ -36,6 +36,7 @@ jobs:
           name: v4-8
           image_suffix: jax_stable
           attention: autoselected
+          pytest_marker: " "
           container_env:
             XLA_PYTHON_CLIENT_MEM_FRACTION: 0.75
             TF_FORCE_GPU_ALLOW_GROWTH: false
@@ -44,6 +45,7 @@ jobs:
           name: a100-40gb-4
           image_suffix: gpu_jax_pinned
           attention: dot_product
+          pytest_marker: "-m 'not tpu'"
           container_env:
             XLA_PYTHON_CLIENT_MEM_FRACTION: 0.65
             TF_FORCE_GPU_ALLOW_GROWTH: true
@@ -63,6 +65,8 @@ jobs:
     - uses: actions/checkout@v3
     - name: Test gsutil installation
       run: which gsutil >/dev/null 2>&1 || { echo >&2 "gsutil is required but not installed. Aborting"; exit 24;}
+    - name: Test with pytest
+      run: cd MaxText;python3 -m pytest "${{ matrix.device.pytest_marker }}"
     - name: Test train.py with c4
       run: python3 MaxText/train.py MaxText/configs/base.yml run_name=runner_$(date +%Y-%m-%d-%H-%M)-${RANDOM} base_output_directory=gs://runner-maxtext-logs dataset_path=gs://maxtext-dataset steps=2 enable_checkpointing=false attention=${{ matrix.device.attention }}
     - name: Test train.py with synthetic data
@@ -100,8 +104,6 @@ jobs:
       options: "--privileged"
     steps:
     - uses: actions/checkout@v3
-    - name: Test with pytest
-      run: cd MaxText;python3 -m pytest
     - name: Validate Pedagogical Example, Shmap_collective_matmul
       run: python3 pedagogical_examples/shmap_collective_matmul.py
 
@@ -125,7 +127,5 @@ jobs:
     - uses: actions/checkout@v3
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-    - name: Test with pytest
-      run: cd MaxText;python3 -m pytest -m "not tpu"
     - name: Test train.py with flash attention
       run: python3 MaxText/train.py MaxText/configs/base.yml run_name=runner_$(date +%Y-%m-%d-%H-%M)-${RANDOM} base_output_directory=gs://runner-maxtext-logs dataset_path=gs://maxtext-dataset steps=2 enable_checkpointing=false attention=cudnn_flash_te
