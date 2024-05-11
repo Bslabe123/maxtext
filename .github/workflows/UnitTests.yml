@@ -27,7 +27,26 @@ on:
     - cron:  '0 */2 * * *'
 
 jobs:
+  build_image:
+    strategy:
+        fail-fast: false
+        matrix:
+          device:
+          - type: tpu
+            name: v4-8
+            mode: stable
+          - type: gpu
+            name: a100-40gb-4
+            mode: pinned
+    runs-on: ["self-hosted", "${{ matrix.device.type }}", "${{ matrix.device.name }}"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: build jax stable image
+      run : |
+        bash docker_build_dependency_image.sh DEVICE=${{ matrix.device.type }} MODE=${{ matrix.device.mode }}
+
   common:
+    needs: build_image
     strategy:
       fail-fast: False
       matrix:
@@ -91,6 +110,7 @@ jobs:
       run: bash end_to_end/test_checkpoint_compatibility.sh runner gs://runner-maxtext-logs gs://maxtext-dataset ${{ matrix.device.attention }}
 
   tpu:
+    needs: build_image
     strategy:
       fail-fast: false
       matrix:
@@ -108,6 +128,7 @@ jobs:
       run: python3 pedagogical_examples/shmap_collective_matmul.py
 
   gpu:
+    needs: build_image
     strategy:
       fail-fast: false
       matrix:
