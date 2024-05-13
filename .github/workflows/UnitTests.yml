@@ -160,6 +160,7 @@ jobs:
   clean_up:
     needs: [gpu, tpu]
     name: "Clean up"
+    runs-on: ["self-hosted"]
     steps:
     - name: Delete GPU image
       run: gcloud container images delete gcr.io/tpu-prod-env-multipod/maxtext_${{ github.sha }}:gpu --force-delete-tags --quiet
