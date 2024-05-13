@@ -368,6 +368,7 @@ def unbox_logicallypartioned(boxed_pytree):
 def init_decode_state(apply_fn, params):
   """Init train state with null opt state for decode."""
   state = train_state.TrainState(step=0, apply_fn=apply_fn, params=params, tx=None, opt_state={})  # type: ignore
+  print(f"params,params: {params}")
   return state
 
 
