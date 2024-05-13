@@ -61,7 +61,7 @@ jobs:
         - type: tpu
           name: v4-8
           attention: autoselected
-          pytest_marker: " "
+          pytest_marker: ''
           container_env:
             XLA_PYTHON_CLIENT_MEM_FRACTION: 0.75
             TF_FORCE_GPU_ALLOW_GROWTH: false
@@ -70,7 +70,7 @@ jobs:
           name: a100-40gb-4
           image_suffix: gpu_jax_pinned
           attention: dot_product
-          pytest_marker: "-m 'not tpu'"
+          pytest_marker: -m 'not tpu'
           container_env:
             XLA_PYTHON_CLIENT_MEM_FRACTION: 0.65
             TF_FORCE_GPU_ALLOW_GROWTH: true
