@@ -27,7 +27,7 @@ on:
     - cron:  '0 */2 * * *'
 
 jobs:
-  build_image:
+  build_and_upload_image:
     strategy:
         fail-fast: false
         matrix:
@@ -38,22 +38,28 @@ jobs:
           - type: gpu
             name: a100-40gb-4
             mode: pinned
+    name: Build and upload image (${{ matrix.device.name }})
     runs-on: ["self-hosted", "${{ matrix.device.type }}", "${{ matrix.device.name }}"]
     steps:
     - uses: actions/checkout@v3
-    - name: build jax stable image
-      run : |
-        bash docker_build_dependency_image.sh DEVICE=${{ matrix.device.type }} MODE=${{ matrix.device.mode }}
+    - name: Build an image
+      run: |
+        bash docker_build_dependency_image.sh MODE=${{ matrix.device.mode }} DEVICE=${{ matrix.device.type }} 
+    - name: Tag the image
+      run: |
+        docker tag maxtext_base_image gcr.io/tpu-prod-env-multipod/maxtext_${{ github.sha }}:${{ matrix.device.type }}
+    - name: Upload the image
+      run: |
+        docker push gcr.io/tpu-prod-env-multipod/maxtext_${{ github.sha }}:${{ matrix.device.type }}
 
   common:
-    needs: build_image
+    needs: build_and_upload_image
     strategy:
       fail-fast: False
       matrix:
         device:
         - type: tpu
           name: v4-8
-          image_suffix: jax_stable
           attention: autoselected
           pytest_marker: " "
           container_env:
@@ -73,7 +79,7 @@ jobs:
     runs-on: ["self-hosted", "${{ matrix.device.type }}", "${{ matrix.device.name }}"]
 
     container:
-      image: gcr.io/tpu-prod-env-multipod/maxtext_${{ matrix.device.image_suffix }}:latest
+      image: gcr.io/tpu-prod-env-multipod/maxtext_${{ github.sha }}:${{ matrix.device.type }}
       volumes: 
         - /home/runner/actions-runner/_work/maxtext/maxtext:/deps
       env:
@@ -118,7 +124,7 @@ jobs:
     name: "TPU test (${{ matrix.device-type }})"
     runs-on: ["self-hosted", "tpu", "${{ matrix.device-type }}"]
     container:
-      image: gcr.io/tpu-prod-env-multipod/maxtext_jax_stable:latest
+      image: gcr.io/tpu-prod-env-multipod/maxtext_${{ github.sha }}:tpu
       volumes: 
       - /home/runner/actions-runner/_work/maxtext/maxtext:/deps
       options: "--privileged"
@@ -137,7 +143,7 @@ jobs:
     name: "GPU test (${{ matrix.device-type }}, ${{ matrix.build-mode }})"
     runs-on: ["self-hosted", "gpu", "${{ matrix.device-type }}"]
     container:
-      image: gcr.io/tpu-prod-env-multipod/maxtext_gpu_jax_pinned:latest
+      image: gcr.io/tpu-prod-env-multipod/maxtext_${{ github.sha }}:gpu
       volumes: 
       - /home/runner/actions-runner/_work/maxtext/maxtext:/deps
       env:
@@ -150,3 +156,15 @@ jobs:
       uses: docker/setup-buildx-action@v3
     - name: Test train.py with flash attention
       run: python3 MaxText/train.py MaxText/configs/base.yml run_name=runner_$(date +%Y-%m-%d-%H-%M)-${RANDOM} base_output_directory=gs://runner-maxtext-logs dataset_path=gs://maxtext-dataset steps=2 enable_checkpointing=false attention=cudnn_flash_te
+
+  clean_up:
+    needs: [gpu, tpu]
+    name: "Clean up"
+    steps:
+    - name: Delete GPU image
+      run: gcloud container images delete gcr.io/tpu-prod-env-multipod/maxtext_${{ github.sha }}:gpu --force-delete-tags --quiet
+    - name: Delete TPU image
+      run: gcloud container images delete gcr.io/tpu-prod-env-multipod/maxtext_${{ github.sha }}:tpu --force-delete-tags --quiet
+    - name: Cleanup old docker images
+      run: docker system prune --all --force
+ 
